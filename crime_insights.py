@@ -174,8 +174,8 @@ display(df_ordered_by_pourcentages)
 
 # COMMAND ----------
 
-# Shows the first ten categories of crime most likely to lead to an arrest
-slice_for_plot = ['PROSTITUTION', 'WARRANTS', 'DRIVING UNDER THE INFLUENCE', 'DRUG/NARCOTIC', 'LIQUOR LAWS', 'LOITERING', 'STOLEN PROPERTY','DRUNKENNESS', 'WEAPON LAWS', 'OTHER OFFENSES']
+# Shows the first five categories of crime most likely to lead to an arrest
+slice_for_plot = ['PROSTITUTION', 'WARRANTS', 'DRIVING UNDER THE INFLUENCE', 'DRUG/NARCOTIC', 'LIQUOR LAWS']
 display(df_ordered_by_pourcentages.select('*').where(col('Category').isin(slice_for_plot)))
 
 # COMMAND ----------
