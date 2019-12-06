@@ -20,7 +20,8 @@ display(police_df)
 # Explore the dataset:
 from pyspark.sql.functions import col, when, count
 
-display(police_df.groupby('Category').agg(count('Category').alias('count')).orderBy('count', ascending=False))
+number_of_crimes_by_category = police_df.groupby('Category').agg(count('Category').alias('count')).orderBy('count', ascending=False)
+display(number_of_crimes_by_category)
 
 # COMMAND ----------
 
@@ -40,7 +41,7 @@ display(police_df.groupby('Category').agg(count('Category').alias('count')).orde
 
 # Categories of crime in correlation to location
 # It is appearent that drug/narcotic crimes tend to be clustered around the 'Tenderloin' area.
-display(police_df.select('PdDistrict', 'Category').groupby('PdDistrict', 'Category').agg(f.count('PdDistrict').alias('count')).orderBy('count', ascending=False))
+display(police_df.select('PdDistrict', 'Category').groupby('PdDistrict', 'Category').agg(count('PdDistrict').alias('count')).orderBy('count', ascending=False))
 
 # COMMAND ----------
 
@@ -58,23 +59,40 @@ display(police_df.groupby('Resolution').agg(count('Resolution').alias('count')).
 
 # COMMAND ----------
 
-# Shows the categories of crime most likely to lead to an arrest (may use some work as i didnt look at all the resolutions)
+# We define when we suppose that a crime led to an arrest
 police_df_with_arrested_column = police_df.withColumn("Arrested?", when(col("Resolution").isin(['NONE','NOT PROSECUTED']),"NOT ARRESTED").otherwise("ARRESTED"))
 police_df_with_arrested_column.cache()
-
-display(police_df_with_arrested_column.select('Arrested?', 'Category').where(col('Category').isin(top_categories)).groupby('Arrested?', 'Category').agg(count('Arrested?').alias('count')).orderBy('count', ascending=False))
-
-# COMMAND ----------
-
-likely_arrested = ['PROSTITUTION', 'STOLEN PROPERTY', 'WEAPON LAWS', 'DRUNKENNESS', 'DRIVING UNDER THE INFLUENCE', 'LIQUOR LAWS', 'LOITERING']
-
-display(police_df_with_arrested_column.select('Arrested?', 'Category').where(col('Category').isin(likely_arrested)).groupby('Arrested?', 'Category').agg(count('Arrested?').alias('count')).orderBy('count', ascending=False))
+display(police_df_with_arrested_column)
 
 # COMMAND ----------
 
+# Count number of arrests by category of crimes
+df_number_of_arrested_by_category = police_df_with_arrested_column.select('Category', 'Arrested?').groupby('Arrested?', 'Category').agg(count('Arrested?').alias('Arrested?_count'))
+display(df_number_of_arrested_by_category)
+
+# COMMAND ----------
+
+# Shows the categories of crime most likely to lead to an arrest
+df_ordered_by_pourcentages = dff.join(number_of_crimes_by_category, on=['Category'], how='inner').withColumn("pourcentage", col("count")/col("Arrested?_count")).orderBy(['Arrested?','pourcentage'], ascending=False)
+display(df_ordered_by_pourcentages)
+
+# COMMAND ----------
+
+# Shows the first ten categories of crime most likely to lead to an arrest
+slice_for_plot = ['PROSTITUTION', 'WARRANTS', 'DRIVING UNDER THE INFLUENCE', 'DRUG/NARCOTIC', 'LIQUOR LAWS', 'LOITERING', 'STOLEN PROPERTY','DRUNKENNESS', 'WEAPON LAWS', 'OTHER OFFENSES']
+display(df_ordered_by_pourcentages.select('*').where(col('Category').isin(slice_for_plot)))
+
+# COMMAND ----------
+
+# Shows the last five categories of crime most likely to lead to an arrest
+slice_for_plot = ['RECOVERED VEHICLE', 'VEHICLE THEFT', 'LARCENY/THEFT', 'SUSPICIOUS OCC', 'VANDALISM']
+display(df_ordered_by_pourcentages.select('*').where(col('Category').isin(slice_for_plot)))
+
+# COMMAND ----------
+
+# Show what type of sex offences most likely to lead to an arrest
 sex_offences = ['SEX OFFENSES, FORCIBLE', 'SEX OFFENSES, NON FORCIBLE']
-
-display(police_df_with_arrested_column.select('Arrested?', 'Category').where(col('Category').isin(sex_offences)).groupby('Arrested?', 'Category').agg(count('Arrested?').alias('count')).orderBy('count', ascending=False))
+display(df_ordered_by_pourcentages.select('*').where(col('Category').isin(sex_offences)))
 
 # COMMAND ----------
 
