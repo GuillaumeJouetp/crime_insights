@@ -1,9 +1,19 @@
 # Databricks notebook source
+# MAGIC %md ### Part 0: Load the data.
+# MAGIC 
+# MAGIC The dataset we used is from "https://data.sfgov.org/Public-Safety/Police-Department-Incident-Reports-Historical-2003/tmnf-yvry?fbclid=IwAR17xpAISe5iU9xqeDa16AuPB6cHp8ZJIOcXwvW9ncW-El6GTfNhOmDtEhg"
+
+# COMMAND ----------
+
 #Load in data
 police_df = spark.read.format('csv').options(header='true', inferSchema='true').load('/FileStore/tables/Police_Department_Incident_Reports__Historical_2003_to_May_2018.csv')
 police_df.cache() # Cache data for faster reuse
 
 display(police_df)
+
+# COMMAND ----------
+
+# MAGIC %md ### Part 1: How categories of crimes are correlated to location ?
 
 # COMMAND ----------
 
@@ -39,28 +49,36 @@ display(police_df.filter("Category='DRUG/NARCOTIC'").select('PdDistrict', 'Categ
 
 # COMMAND ----------
 
+# MAGIC %md ### Part 2: Categories of crimes likely to lead to an arrest ?
+
+# COMMAND ----------
+
 # An overview of the most common actions taken by the police of reported crimes
 display(police_df.groupby('Resolution').agg(count('Resolution').alias('count')).orderBy('count', ascending=False))
 
 # COMMAND ----------
 
 # Shows the categories of crime most likely to lead to an arrest (may use some work as i didnt look at all the resolutions)
-police_df2 = police_df.withColumn("Arrested?", when(col("Resolution").isin(['NONE','NOT PROSECUTED']),"NOT ARRESTED").otherwise("ARRESTED"))
-police_df2.cache()
+police_df_with_arrested_column = police_df.withColumn("Arrested?", when(col("Resolution").isin(['NONE','NOT PROSECUTED']),"NOT ARRESTED").otherwise("ARRESTED"))
+police_df_with_arrested_column.cache()
 
-display(police_df2.select('Arrested?', 'Category').where(col('Category').isin(top_categories)).groupby('Arrested?', 'Category').agg(count('Arrested?').alias('count')).orderBy('count', ascending=False))
+display(police_df_with_arrested_column.select('Arrested?', 'Category').where(col('Category').isin(top_categories)).groupby('Arrested?', 'Category').agg(count('Arrested?').alias('count')).orderBy('count', ascending=False))
 
 # COMMAND ----------
 
 likely_arrested = ['PROSTITUTION', 'STOLEN PROPERTY', 'WEAPON LAWS', 'DRUNKENNESS', 'DRIVING UNDER THE INFLUENCE', 'LIQUOR LAWS', 'LOITERING']
 
-display(police_df2.select('Arrested?', 'Category').where(col('Category').isin(likely_arrested)).groupby('Arrested?', 'Category').agg(count('Arrested?').alias('count')).orderBy('count', ascending=False))
+display(police_df_with_arrested_column.select('Arrested?', 'Category').where(col('Category').isin(likely_arrested)).groupby('Arrested?', 'Category').agg(count('Arrested?').alias('count')).orderBy('count', ascending=False))
 
 # COMMAND ----------
 
 sex_offences = ['SEX OFFENSES, FORCIBLE', 'SEX OFFENSES, NON FORCIBLE']
 
-display(police_df2.select('Arrested?', 'Category').where(col('Category').isin(sex_offences)).groupby('Arrested?', 'Category').agg(count('Arrested?').alias('count')).orderBy('count', ascending=False))
+display(police_df_with_arrested_column.select('Arrested?', 'Category').where(col('Category').isin(sex_offences)).groupby('Arrested?', 'Category').agg(count('Arrested?').alias('count')).orderBy('count', ascending=False))
+
+# COMMAND ----------
+
+# MAGIC %md ### Part 3: Show correlation between season/month/weekday/hour
 
 # COMMAND ----------
 
@@ -164,7 +182,3 @@ display(police_df4.select('DayOfMonth', 'Category').where(col('Category').isin(t
 # COMMAND ----------
 
 # Further work.....
-
-# COMMAND ----------
-
-
