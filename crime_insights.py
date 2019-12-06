@@ -50,6 +50,102 @@ display(police_df.filter("Category='DRUG/NARCOTIC'").select('PdDistrict', 'Categ
 
 # COMMAND ----------
 
+# Register DataFrame as an SQL table
+sqlContext.sql("DROP TABLE IF EXISTS insight_dataset")
+dbutils.fs.rm("dbfs:/user/hive/warehouse/insight_dataset", True)
+sqlContext.registerDataFrameAsTable(police_df, "insight_dataset")
+
+df = sqlContext.table("insight_dataset")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC -- Number of crimes within the top 10 categories in correlation to the district - Better view
+# MAGIC -- Look as a bar chart and add the values to the chart
+# MAGIC select count(CASE WHEN Category = "LARCENY/THEFT" THEN 1 END) as Theft,
+# MAGIC count(CASE WHEN Category = "OTHER OFFENSES" THEN 1 END) as Other,
+# MAGIC count(CASE WHEN Category = "NON-CRIMINAL" THEN 1 END) as NonCriminal,
+# MAGIC count(CASE WHEN Category = "ASSAULT" THEN 1 END) as Assault,
+# MAGIC count(CASE WHEN Category = "DRUG/NARCOTIC" THEN 1 END) as Drug,
+# MAGIC count(CASE WHEN Category = "VANDALISM" THEN 1 END) as Vandalism,
+# MAGIC count(CASE WHEN Category = "WARRANTS" THEN 1 END) as Warrants,
+# MAGIC count(CASE WHEN Category = "BURGLARY" THEN 1 END) as Burglary,
+# MAGIC count(CASE WHEN Category = "SUSPICIOUS OCC" THEN 1 END) as Suspicious,
+# MAGIC PdDistrict as District from insight_dataset
+# MAGIC where PdDistrict is not null group by PdDistrict
+
+# COMMAND ----------
+
+# Police data set up
+
+from geopandas import *
+from shapely.geometry import Point
+import pandas as pd
+import matplotlib.pyplot as plt
+
+police_data = pd.read_csv('/dbfs/FileStore/tables/Police_Department_Incident_Reports__Historical_2003_to_May_2018.csv')
+police_data['geometry'] = police_data.apply(lambda row: Point(row['X'], row['Y']), axis=1)
+
+# COMMAND ----------
+
+# Drug activity display
+drug_category = ['DRUG/NARCOTIC']
+
+drug_police_data = police_data[police_data.Category.isin(drug_category)]
+
+drug_geo_police_data = geopandas.GeoDataFrame(drug_police_data, geometry='geometry')
+drug_geo_police_data.crs = {'init': 'epsg:4326'}
+drug_geo_police_data.plot(figsize=(13,10), color='red', alpha=0.02)
+plt.axis([-122.52, -122.36, 37.70, 37.83])
+
+plt.show()
+display()
+
+# COMMAND ----------
+
+# Suspicious activity display
+suspicious_occ_category = ['SUSPICIOUS OCC']
+
+suspicious_police_data = police_data[police_data.Category.isin(suspicious_occ_category)]
+
+suspicious_geo_police_data = geopandas.GeoDataFrame(suspicious_police_data, geometry='geometry')
+suspicious_geo_police_data.crs = {'init': 'epsg:4326'}
+suspicious_geo_police_data.plot(figsize=(13,10), color='green', alpha=0.02)
+plt.axis([-122.52, -122.36, 37.70, 37.83])
+
+plt.show()
+display()
+
+# COMMAND ----------
+
+# San Francisco Map Display
+
+geo_map = geopandas.read_file('/dbfs/FileStore/tables/geojson.json')
+
+geo_map.crs = {'init': 'epsg:4326'}
+geo_map = geo_map.rename(columns={'geometry': 'geometry','nhood':'neighborhood_name'}).set_geometry('geometry')
+
+geo_map.plot(figsize=(13,10), color='gray')
+plt.show()
+
+display()
+
+# COMMAND ----------
+
+# Final result Display
+
+fig, ax = plt.subplots(1, figsize=(13,10))
+sf_map = geo_map.plot(ax=ax, color='gray')
+drug_geo_police_data.plot(ax=sf_map, marker="o", color="red", markersize=8, edgecolor='k', alpha=0.05)
+# suspicious_geo_police_data.plot(ax=sf_map, marker="o", color="green", markersize=8, edgecolor='k', alpha=0.05)  -- too much to see
+ax.set_title("San Francisco Drug Crime Map")
+
+plt.axis([-122.52, -122.36, 37.70, 37.83])
+plt.show()
+display()
+
+# COMMAND ----------
+
 # MAGIC %md ### Part 2: Categories of crimes likely to lead to an arrest ?
 
 # COMMAND ----------
@@ -73,7 +169,7 @@ display(df_number_of_arrested_by_category)
 # COMMAND ----------
 
 # Shows the categories of crime most likely to lead to an arrest
-df_ordered_by_pourcentages = dff.join(number_of_crimes_by_category, on=['Category'], how='inner').withColumn("pourcentage", col("count")/col("Arrested?_count")).orderBy(['Arrested?','pourcentage'], ascending=False)
+df_ordered_by_pourcentages = df_number_of_arrested_by_category.join(number_of_crimes_by_category, on=['Category'], how='inner').withColumn("pourcentage", col("count")/col("Arrested?_count")).orderBy(['Arrested?','pourcentage'], ascending=False)
 display(df_ordered_by_pourcentages)
 
 # COMMAND ----------
@@ -173,7 +269,7 @@ display(police_df_dt.select('Season', 'Category').where(col('Category').isin(fou
 # but it is interesting to see that the time of day with most reported crimes is 18.00
 
 # .where(col('Category').isin(top_categories))
-display(police_df4.select('Hour', 'Category').groupby('Hour', 'Category').agg(count('Hour').alias('count')).orderBy('Hour', ascending=True))
+display(police_df_dt.select('Hour', 'Category').groupby('Hour', 'Category').agg(count('Hour').alias('count')).orderBy('Hour', ascending=True))
 
 # COMMAND ----------
 
@@ -182,20 +278,20 @@ display(police_df4.select('Hour', 'Category').groupby('Hour', 'Category').agg(co
 # but it is interesting to see that the time of day with most reported crimes is 18.00
 
 # .where(col('Category').isin(top_categories))
-display(police_df4.select('Hour', 'Category').where(col('Category').isin(top_categories)).groupby('Hour', 'Category').agg(count('Hour').alias('count')).orderBy('Hour', ascending=True))
+display(police_df_dt.select('Hour', 'Category').where(col('Category').isin(top_categories)).groupby('Hour', 'Category').agg(count('Hour').alias('count')).orderBy('Hour', ascending=True))
 
 # COMMAND ----------
 
 # Frequency of crimes in correlation to month year
 # There is no particular category that noticeable stands out by this result at first glance,
-display(police_df4.select('Month', 'Category').where(col('Category').isin(top_categories)).groupby('Month', 'Category').agg(count('Month').alias('count')).orderBy('Month', ascending=True))
+display(police_df_dt.select('Month', 'Category').where(col('Category').isin(top_categories)).groupby('Month', 'Category').agg(count('Month').alias('count')).orderBy('Month', ascending=True))
 
 # COMMAND ----------
 
 # Frequency of crimes in correlation to day of month
 # 31 is obviously less than the others as there is fewever 31th than the other days of month,
 # however it is interesting that the 1th is higher than the others??
-display(police_df4.select('DayOfMonth', 'Category').where(col('Category').isin(top_categories)).groupby('DayOfMonth', 'Category').agg(count('DayOfMonth').alias('count')).orderBy('DayOfMonth', ascending=True))
+display(police_df_dt.select('DayOfMonth', 'Category').where(col('Category').isin(top_categories)).groupby('DayOfMonth', 'Category').agg(count('DayOfMonth').alias('count')).orderBy('DayOfMonth', ascending=True))
 
 # COMMAND ----------
 
